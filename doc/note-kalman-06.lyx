@@ -145,7 +145,7 @@ Shuyong Chen
 \begin_inset Formula $M$
 \end_inset
 
-)这3种传感器数据。目标是实现常说的神秘的高大上的9轴数据融合算法。
+)这3种传感器数据。目标是实现江湖传说的神秘莫测的高大上的9轴数据融合算法。
 \end_layout
 
 \begin_layout Standard
@@ -181,7 +181,7 @@ G_{1}|\Delta t_{1}|Y_{1}|\Delta t_{2}|M_{1}|\Delta t_{3}|G_{2}|\Delta t_{4}|Y_{2
 \begin_inset Formula $ij=-k$
 \end_inset
 
-。并且JPL约定习惯上存储也和Hamilton约定相反：
+。并且JPL约定习惯上存储顺序也和Hamilton约定相反：
 \end_layout
 
 \begin_layout Standard
@@ -276,8 +276,8 @@ p_{4}q_{4}-\mathbf{p}\cdot\mathbf{q}
 \begin_inset Formula 
 \[
 p\odot q\equiv\left[\begin{array}{c}
-p_{1}\mathbf{q}+q_{1}\mathbf{p}+\mathbf{p}\times\mathbf{q}\\
-p_{1}q_{1}-\mathbf{p}\cdot\mathbf{q}
+p_{1}q_{1}-\mathbf{p}\cdot\mathbf{q}\\
+p_{1}\mathbf{q}+q_{1}\mathbf{p}+\mathbf{p}\times\mathbf{q}
 \end{array}\right]
 \]
 
@@ -1097,15 +1097,15 @@ q=\delta q\otimes\hat{q}
 \end_inset
 
 因为误差很小，范数
-\begin_inset Formula $a_{g}^{2}\approx0$
+\begin_inset Formula $a_{g}^{2}$
 \end_inset
 
-，所以为简化运算，可以近似为
+也很小，所以为简化运算，可以二阶近似为(文档[2]方程(19))
 \begin_inset Formula 
 \[
 \delta q(\mathbf{a})\approx\left[\begin{array}{c}
 \dfrac{\mathbf{a}}{2}\\
-1
+1-a^{2}/8
 \end{array}\right]
 \]
 
@@ -1322,7 +1322,7 @@ J=\left[\begin{array}{cc}
 \begin_inset Formula $F=I+J\mathrm{d}t$
 \end_inset
 
-只是一阶近似公式，如果要提高精度计算高阶公式，请看文档[5]中第2.5.1节的讨论。
+只是一阶近似公式，如果要提高精度采用高阶公式，请看文档[5]中第2.5.1节的讨论。
 \end_layout
 
 \begin_layout Standard
@@ -1453,7 +1453,7 @@ Q_{d}=\left[\begin{array}{cc}
 \begin_inset Formula $H$
 \end_inset
 
-。就是使用固定向量观测方法，分别对指向地心的重力向量和指向磁极的地磁向量进行观测，从而校正了误差和偏差。
+。方案就是使用固定向量观测方法，分别对指向地心的重力向量和指向磁极的地磁向量进行观测，从而校正了误差和偏差。
 \end_layout
 
 \begin_layout Subsubsection
@@ -1636,7 +1636,11 @@ R=\left[\wedge\left(\sigma_{a}^{2}\right)\right]
 \begin_inset Formula $0$
 \end_inset
 
-既可。于是该向量可以暂时简单设置为
+既可。从这点也可以看出，卡尔曼滤波器只关心向量的协方差矩阵，不关心具体的向量值。当某个方向的向量值受到了扰动，就体现在卡尔曼增益矩阵
+\begin_inset Formula $K$
+\end_inset
+
+上面。于是地磁向量可以暂时简单设置为
 \begin_inset Formula $\boldsymbol{m}=\left[\begin{array}{ccc}
 0 & 1 & 0\end{array}\right]$
 \end_inset
@@ -2039,7 +2043,7 @@ literal "false"
 \end_layout
 
 \begin_layout Enumerate
-参考代码在这里 : https://github.com/shuyong/ESKF-2003
+实现代码在这里 : https://github.com/shuyong/ESKF-2003
 \end_layout
 
 \end_body
