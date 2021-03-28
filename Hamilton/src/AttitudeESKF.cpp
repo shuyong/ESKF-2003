@@ -24,6 +24,13 @@
 
 #include "AttitudeESKF.hpp"
 
+/* Cited sources
+ * [1]. "Attitude Error Representations for Kalman Filtering", F. Landis Markley, JPL
+ * [2]. "Indirect Kalman Filter for 3D Attitude Estimation", N. Trawny & S. Roumeliotis
+ * [3]. "Quaternion kinematics for the error-state Kalman filter", J. Sola
+ * [4]. "Fast Quaternion Attitude Estimation from two vector measurements", F. Landis Markley
+ */
+
 using namespace Eigen;
 
 namespace AttitudeEKF {
@@ -195,8 +202,8 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
 
   // noise jacobian
 
-  Q_11_	= sigma_gyro_ * sigma_gyro_ * dt * I3 + sigma_gyro_drift_ * sigma_gyro_drift_ * dt * (I3 * 1.0/3.0 * dt * dt + 2.0/120.0  * dt * dt * w_cross);
-  Q_12_	= -sigma_gyro_drift_ * sigma_gyro_drift_ * (I3 * 0.5 * dt * dt - 1.0/6.0 * dt * dt * w_cross + 1.0/24.0 * dt * dt * w_cross * w_cross);
+  Q_11_ = sigma_gyro_ * sigma_gyro_ * dt * I3 + sigma_gyro_drift_ * sigma_gyro_drift_ * dt * (I3 * 1.0/3.0 * dt * dt + 2.0/120.0  * dt * dt * w_cross * w_cross);
+  Q_12_ = -sigma_gyro_drift_ * sigma_gyro_drift_ * (I3 * 0.5 * dt * dt - 1.0/6.0 * dt * dt * w_cross + 1.0/24.0 * dt * dt * w_cross * w_cross);
   Q_21_	= Q_12_.transpose();
   Q_22_ = sigma_gyro_drift_ * sigma_gyro_drift_ * dt * I3;
 
