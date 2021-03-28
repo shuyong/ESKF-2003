@@ -188,13 +188,32 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   //     [ 0_3×3  I_3×3 ]
   //
 
-  // rotation matrix
-  mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ * dt);
   // error-state Jacobian
-  // eq.(193) in [2]
-  F_00_ =  I3 - w_cross + 0.5 * w_cross * w_cross;
-  // eq.(201) in [2]
-  F_01_ = -I3 * dt + 0.5 * dt * w_cross + 1.0/6.0 * dt * w_cross * w_cross;
+  // The Θ is in fact a rotational matrix with ω as the axis of rotation and |ω̂|∆t the corresponding angle.
+  if (w_ref_.norm() >= w_threshold_) {
+    auto wdt     = w_ref_.norm() * dt;
+    auto cos_wdt = cos(wdt);
+    auto sin_wdt = sin(wdt);
+    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ / w_ref_.norm());
+    mat3 wwT = (w_ref_ / w_ref_.norm()) * (w_ref_.transpose() / w_ref_.norm());
+    // eq.(192) in [2]
+    F_00_ = cos_wdt * I3
+          - sin_wdt * w_cross
+          + (1 - cos_wdt) * wwT;
+    // eq.(197) in [2]
+    auto w2 = w_ref_.norm() * w_ref_.norm();
+    auto w3 = w_ref_.norm() * w_ref_.norm() * w_ref_.norm();
+    w_cross = toCrossMatrix<scalar_t>(w_ref_);
+    F_01_ = -I3 * dt
+          + 1.0/w2 * (1 - cos_wdt) * w_cross
+          - 1.0/w3 * (wdt - sin_wdt) * w_cross * w_cross;
+  } else {
+    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ * dt);
+    // eq.(193) in [2]
+    F_00_ =  I3 - w_cross + 0.5 * w_cross * w_cross;
+    // eq.(201) in [2]
+    F_01_ = -I3 * dt + 0.5 * dt * w_cross + 1.0/6.0 * dt * w_cross * w_cross;
+  }
   //F_10_.setZero();
   // bias Jacobian
   F_11_ = I3;
@@ -203,10 +222,39 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   P_ = F_ * P_ * F_.transpose();
 
   // noise jacobian
-
-  Q_11_ = sigma_gyro_ * sigma_gyro_ * dt * I3 + sigma_gyro_drift_ * sigma_gyro_drift_ * dt * (I3 * 1.0/3.0 * dt * dt + 2.0/120.0  * dt * dt * w_cross * w_cross);
-  Q_12_ = -sigma_gyro_drift_ * sigma_gyro_drift_ * (I3 * 0.5 * dt * dt - 1.0/6.0 * dt * dt * w_cross + 1.0/24.0 * dt * dt * w_cross * w_cross);
+  // eq.(208) in [2]
+  if (w_ref_.norm() >= w_threshold_) {
+    // eq.(209) in [2]
+    auto sr2 = sigma_gyro_ * sigma_gyro_;
+    auto sw2 = sigma_gyro_drift_ * sigma_gyro_drift_;
+    auto dt2 = dt * dt;
+    auto dt3 = dt * dt * dt;
+    auto wdt     = w_ref_.norm() * dt;
+    auto wdt2    = wdt * wdt;
+    auto wdt3    = wdt * wdt * wdt;
+    auto cos_wdt = cos(wdt);
+    auto sin_wdt = sin(wdt);
+    auto w_norm3 = w_ref_.norm() * w_ref_.norm() * w_ref_.norm();
+    auto w_norm4 = w_norm3 * w_ref_.norm();
+    auto w_norm5 = w_norm4 * w_ref_.norm();
+    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_);
+    mat3 w_cross2= w_cross * w_cross;
+    Q_11_ = sr2 * dt * I3
+          + sw2 * (I3 * 1.0/3.0 * dt3 + (wdt3 / 3.0 + 2 * sin_wdt - 2 * wdt) / w_norm5 * w_cross2);
+    // eq.(210) in [2]
+    Q_12_ = -sw2 * ( I3 * 0.5 * dt2
+                    -(wdt - sin_wdt) / w_norm3 * w_cross
+                    +(wdt2 / 2.0 + cos_wdt - 1.0) / w_norm4 * w_cross2
+                   );
+  } else {
+    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ * dt);
+    // eq.(212) in [2]
+    Q_11_ = sigma_gyro_ * sigma_gyro_ * dt * I3 + sigma_gyro_drift_ * sigma_gyro_drift_ * dt * (I3 * 1.0/3.0 * dt * dt + 2.0/120.0  * dt * dt * w_cross * w_cross);
+    // eq.(213) in [2]
+    Q_12_ = -sigma_gyro_drift_ * sigma_gyro_drift_ * (I3 * 0.5 * dt * dt - 1.0/6.0 * dt * dt * w_cross + 1.0/24.0 * dt * dt * w_cross * w_cross);
+  }
   Q_21_	= Q_12_.transpose();
+  // eq.(211) in [2]
   Q_22_ = sigma_gyro_drift_ * sigma_gyro_drift_ * dt * I3;
 
   // P = F P F' + Q
@@ -228,7 +276,7 @@ void AttitudeESKF::timePropagation(const AttitudeESKF::vec3& wb,
   w_out_ = wb;
   // The estimated angular velocity ω
   // true gyro reading
-  // eq.(27), eq.(30) & eq.(58)
+  // eq.(27), eq.(58)
   w_ref_ = w_out_ - b_ - w_c_;
 
   predict(dt);
@@ -302,7 +350,7 @@ void AttitudeESKF::measurementUpdateWithVector(const AttitudeESKF::mat3& R) {
   // see section "3.5 reset".
 
   // eq.(48)
-  P_ -= K_ * H_a_ * P_row_;
+  P_ = P_ - K_ * H_a_ * P_row_;
 
   // reset
   reset();
@@ -319,6 +367,7 @@ void AttitudeESKF::reset() {
   // eq.(22)
   q_ref_.normalize();
   a_.setZero();
+  // eq.(30)
 }
 
 // Measurement Update (“Correct”)
@@ -408,7 +457,7 @@ void AttitudeESKF::measurementUpdateQuat(const vec3& ma, scalar_t dt) {
   x_ = x_ + K_ * z_res;
 
   // eq.(48)
-  P_ -= K_ * P_row_; 
+  P_ = P_ - K_ * P_row_;
 
   // reset
   reset();

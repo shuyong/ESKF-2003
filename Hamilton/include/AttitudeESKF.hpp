@@ -306,6 +306,8 @@ private:
   #define F_01_	F_.block<3,3>(0, bs_i * V_sz)
   #define F_10_	F_.block<3,3>(3, ag_i * V_sz)
   #define F_11_	F_.block<3,3>(3, bs_i * V_sz)
+  // Threshold for which values of |ω̂| we will use approximate expressions for when |ω̂|→0 . (0.06°)
+  scalar_t w_threshold_ = 0.001;
 
   // Vector Measurement
   vec3 v_B_;
