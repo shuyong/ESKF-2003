@@ -191,8 +191,10 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   // rotation matrix
   mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ * dt);
   // error-state Jacobian
+  // eq.(193) in [2]
   F_00_ =  I3 - w_cross + 0.5 * w_cross * w_cross;
-  F_01_ = -I3 * dt + 0.5 * dt * w_cross + 1.0/6.0 * dt  * w_cross * w_cross;
+  // eq.(201) in [2]
+  F_01_ = -I3 * dt + 0.5 * dt * w_cross + 1.0/6.0 * dt * w_cross * w_cross;
   //F_10_.setZero();
   // bias Jacobian
   F_11_ = I3;
@@ -241,7 +243,7 @@ void AttitudeESKF::measurementUpdateWithVector(const AttitudeESKF::mat3& R) {
   // FIXME: maybe A_a == I, because after reset, a_ == 0;
   mat3 A_a = toRotationMatrix<scalar_t>(a_);
   // eq.(42)
-  mat3 A_q = A_a * q_ref_.toRotationMatrix();
+  mat3 A_q = q_ref_.toRotationMatrix() * A_a;
   // rotation from Inertial frame to Body frame
   v_B_ = A_q.transpose() * v_I_;
 
