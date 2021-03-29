@@ -233,13 +233,16 @@ private:
   // dq_ref = --- [       ] ⊗ q_ref
   //           2  [   0   ]
   //
-  // The estimated angular velocity ω
-  // eq.(27) ω_ref = ω
+  // A priori angular velocity prediction, ω_{k+1|k}
+  // eq.(23) & eq.(27) ω_ref = ω
   vec3 w_ref_;
+  // The estimated angular velocity ω, ω_{k|k}
+  // eq.(30) ω̂ = ω_out − b̂
+  vec3 w_hat_;
   // The angular rate vector of gyro output
-  // eq.(30) ω = ω_out - b
   vec3 w_out_;
   // gyro drift / bias vector
+  vec3 b_hat_;
   #define b_	(x_.block<3, 1>(bs_i * V_sz, 0))
   // The second-order term of the propagation bias correction
   // eq.(55)

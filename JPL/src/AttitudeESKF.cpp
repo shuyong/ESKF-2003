@@ -119,6 +119,50 @@ static inline void integrateEuler(Eigen::QuaternionJPL<Scalar>& q, const Eigen::
 }
 
 /**
+ * @brief First-order quaternion integrator.
+ * 
+ * An implementation of eq.(226) in [3] in Hamilton convention.
+ * Also refer to eq.(131) in [1] for the same equation in JPL convention,
+ * but in matrix product form.
+ * 
+ * @note The first-order quaternion integrator does not conserve the unit
+ * quaternion property. One therefore have to make sure to re-normalize the
+ * result if the norm of the quaternion has diverged significantly from 1.
+ * 
+ * @param q Quaternion to integrate
+ * @param w_hat Angular velocity (body frame), stored in 3 complex terms
+ * @param w_bar Angular velocity (body frame), stored in 3 complex terms
+ * @param dt Time interval in seconds
+ */
+template <typename Scalar>
+static inline void integrateFirst(Eigen::QuaternionJPL<Scalar>& q, const Eigen::Matrix<Scalar,3,1>& w_hat, const Eigen::Matrix<Scalar,3,1>& w_bar, Scalar dt) {
+  // Calculate median rate
+  Eigen::Matrix<Scalar,3,1> w2 = (w_hat + w_bar) / 2.0;
+  Scalar angle = w2.norm() * dt / 2.0;
+  Scalar angle_threshold = 0.001 * dt / 2.0;
+  Eigen::Matrix<Scalar,3,1> axis;
+  Eigen::QuaternionJPL<Scalar> q_1st;
+
+  q_1st.w() = cos(angle);
+  if (angle >= angle_threshold) {
+    axis = w2 / w2.norm();
+    q_1st.vec() = sin(angle) * axis;
+  } else {
+    auto sq_angle = (w2.norm() * dt) * (w2.norm() * dt);
+    q_1st.vec() = (dt / 2.0 - sq_angle * dt / 48.0) * w2;
+  }
+
+  // Calculate dt^2/24 * [ 0 w_hat x w_bar ]'
+  Eigen::QuaternionJPL<Scalar> q_2nd(0, 0, 0, 0);
+  q_2nd.vec() = 1.0/24.0 * dt * dt * w_hat.cross(w_bar);
+
+  //eq.(226)
+  q = (q_1st + q_2nd) * q;
+
+  q.normalize();
+}
+
+/**
  *  @brief Integrate a rotation quaternion using 4th order Runge Kutta
  *  @param q Quaternion to integrate
  *  @param w Angular velocity (body frame), stored in 3 complex terms
@@ -173,12 +217,16 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   if (dt == 0) return;
 
   // integrate state and covariance
+#if 1
+  integrateFirst(q_ref_, w_hat_, w_ref_, dt);
+#else
   // [ x, y, z, 0 ]
   quat wQuat(w_ref_[0], w_ref_[1], w_ref_[2], 0);
 #if 1
   integrateEuler(q_ref_, wQuat, dt);
 #else
   integrateRungeKutta4(q_ref_, wQuat, dt);
+#endif
 #endif
 
   // transition matrix
@@ -277,7 +325,7 @@ void AttitudeESKF::timePropagation(const AttitudeESKF::vec3& wb,
   // The estimated angular velocity ω
   // true gyro reading
   // eq.(27), eq.(58)
-  w_ref_ = w_out_ - b_ - w_c_;
+  w_ref_ = w_out_ - b_hat_ - w_c_;
 
   predict(dt);
   // P = F P F' + Q
@@ -366,8 +414,12 @@ void AttitudeESKF::reset() {
   q_ref_ = dq_ * q_ref_;
   // eq.(22)
   q_ref_.normalize();
-  a_.setZero();
+
+  b_hat_ += b_;
   // eq.(30)
+  w_hat_ = w_out_ - b_hat_;
+
+  x_.setZero();
 }
 
 // Measurement Update (“Correct”)
@@ -487,6 +539,7 @@ void AttitudeESKF::initialize()
 {
   // q_ref(0) = [ 0, 0, 0, 1 ]
   q_ref_ = quat(0, 0, 0, 1);
+  b_hat_.setZero();
 
   // x_0 = 0;
   x_.setZero();
@@ -494,6 +547,8 @@ void AttitudeESKF::initialize()
   a_.setZero();
   b_.setZero();
 #endif
+  w_ref_.setZero();
+  w_hat_.setZero();
 
   // P0 = I
   P_.setIdentity();
