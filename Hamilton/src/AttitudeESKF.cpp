@@ -229,6 +229,8 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
 #endif
 #endif
 
+  auto w_ref_norm = w_ref_.norm();
+
   // transition matrix
   F_.setZero();
   //     [ Θ      Ψ     ]
@@ -238,19 +240,19 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
 
   // error-state Jacobian
   // The Θ is in fact a rotational matrix with ω as the axis of rotation and |ω̂|∆t the corresponding angle.
-  if (w_ref_.norm() >= w_threshold_) {
-    auto wdt     = w_ref_.norm() * dt;
+  if (w_ref_norm >= w_threshold_) {
+    auto wdt     = w_ref_norm * dt;
     auto cos_wdt = cos(wdt);
     auto sin_wdt = sin(wdt);
-    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ / w_ref_.norm());
-    mat3 wwT = (w_ref_ / w_ref_.norm()) * (w_ref_.transpose() / w_ref_.norm());
+    mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_ / w_ref_norm);
+    mat3 wwT = (w_ref_ / w_ref_norm) * (w_ref_.transpose() / w_ref_norm);
     // eq.(192) in [2]
     F_00_ = cos_wdt * I3
           - sin_wdt * w_cross
           + (1 - cos_wdt) * wwT;
     // eq.(197) in [2]
-    auto w2 = w_ref_.norm() * w_ref_.norm();
-    auto w3 = w_ref_.norm() * w_ref_.norm() * w_ref_.norm();
+    auto w2 = w_ref_norm * w_ref_norm;
+    auto w3 = w_ref_norm * w_ref_norm * w_ref_norm;
     w_cross = toCrossMatrix<scalar_t>(w_ref_);
     F_01_ = -I3 * dt
           + 1.0/w2 * (1 - cos_wdt) * w_cross
@@ -266,25 +268,22 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   // bias Jacobian
   F_11_ = I3;
 
-  // P = F P F'
-  P_ = F_ * P_ * F_.transpose();
-
   // noise jacobian
   // eq.(208) in [2]
-  if (w_ref_.norm() >= w_threshold_) {
+  if (w_ref_norm >= w_threshold_) {
     // eq.(209) in [2]
     auto sr2 = sigma_gyro_ * sigma_gyro_;
     auto sw2 = sigma_gyro_drift_ * sigma_gyro_drift_;
     auto dt2 = dt * dt;
     auto dt3 = dt * dt * dt;
-    auto wdt     = w_ref_.norm() * dt;
+    auto wdt     = w_ref_norm * dt;
     auto wdt2    = wdt * wdt;
     auto wdt3    = wdt * wdt * wdt;
     auto cos_wdt = cos(wdt);
     auto sin_wdt = sin(wdt);
-    auto w_norm3 = w_ref_.norm() * w_ref_.norm() * w_ref_.norm();
-    auto w_norm4 = w_norm3 * w_ref_.norm();
-    auto w_norm5 = w_norm4 * w_ref_.norm();
+    auto w_norm3 = w_ref_norm * w_ref_norm * w_ref_norm;
+    auto w_norm4 = w_norm3 * w_ref_norm;
+    auto w_norm5 = w_norm4 * w_ref_norm;
     mat3 w_cross = toCrossMatrix<scalar_t>(w_ref_);
     mat3 w_cross2= w_cross * w_cross;
     Q_11_ = sr2 * dt * I3
@@ -306,7 +305,7 @@ void AttitudeESKF::predict(AttitudeESKF::scalar_t dt) {
   Q_22_ = sigma_gyro_drift_ * sigma_gyro_drift_ * dt * I3;
 
   // P = F P F' + Q
-  P_ = P_ + Q_;
+  P_ = F_ * P_ * F_.transpose() + Q_;
 
   // second-order term correct angular velocity
   w_c_[0] = 0.5 * (P_c_(2, 1) - P_c_(1, 2));
@@ -350,7 +349,7 @@ void AttitudeESKF::measurementUpdateWithVector(const AttitudeESKF::mat3& R) {
   // eq.(44)
   H_a_ = toCrossMatrix<scalar_t>(v_B_);
 
-  // ???eq.(70)
+  // FIXME: eq.(70)
   //scalar_t p_a = 0.001;
   //scalar_t p_a = 0.12;
 
@@ -372,6 +371,7 @@ void AttitudeESKF::measurementUpdateWithVector(const AttitudeESKF::mat3& R) {
   //
   // Innovation (or pre-fit residual) covariance.
   // The covariance of the residual.
+  // S = H_a * P_a * H_a' + R
   mat3 S = H_a_ * P_a_ * H_a_.transpose() + R;
   // Innovation or measurement pre-fit residual.
   vec3 z_res = h_obs_ - h_pred(v_B_);
@@ -393,12 +393,20 @@ void AttitudeESKF::measurementUpdateWithVector(const AttitudeESKF::mat3& R) {
   x_ = x_ + K_ * z_res;
   // x_ = [ a_  b_ ]
   //
-  // a_ = K * z_residual
-  // because after reset : a_ == 0;
+  // x_ = K * z_residual
+  // because after reset : x_ == 0;
   // see section "3.5 reset".
 
+#if 0
+  // P = (I - K * H) * P
   // eq.(48)
   P_ = P_ - K_ * H_a_ * P_row_;
+#else
+  // P = (I - K * H) * P * (I - K * H)' + K * R * K' is more numerically stable
+  mat3_NxN I = mat3_NxN::Identity();
+  auto I_KH = I - K_ * H_;
+  P_ = I_KH * P_ * I_KH.transpose() + K_ * R * K_.transpose();
+#endif
 
   // reset
   reset();
@@ -415,6 +423,7 @@ void AttitudeESKF::reset() {
   // eq.(22)
   q_ref_.normalize();
 
+  // The observed error mean has been injected into the nominal state
   b_hat_ += b_;
   // eq.(30)
   w_hat_ = w_out_ - b_hat_;
@@ -537,10 +546,12 @@ void AttitudeESKF::externalYawUpdate(scalar_t yaw, scalar_t alpha) {
 
 void AttitudeESKF::initialize()
 {
+  // The nominal state vector
   // q_ref(0) = [ 1, 0, 0, 0 ]
   q_ref_ = quat(1, 0, 0, 0);
   b_hat_.setZero();
 
+  // The error state vector
   // x_0 = 0;
   x_.setZero();
 #if 0

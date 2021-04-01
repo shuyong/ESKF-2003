@@ -210,6 +210,9 @@ private:
   void measurementUpdateWithVector(const mat3& R);
   void reset();
 
+  // The nominal state vector
+  // nominal x = [ q_ref, b_hat ]
+  //
   // Global Orientation, unit reference quaternion
   // eq.(13) q = δq(a) ⊗ q_ref
   quat q_ref_;
@@ -241,6 +244,8 @@ private:
   vec3 w_out_;
   // gyro drift / bias vector
   vec3 b_hat_;
+  // The element of error state
+  // b_hat += b_
   #define b_	(x_.block<3, 1>(bs_i * V_sz, 0))
   // The second-order term of the propagation bias correction
   // eq.(55)
@@ -252,8 +257,9 @@ private:
   vec3 w_c_;
   // Attitude Error Representations
   // eq.(09) & eq.(34) Gibbs Vector
+  // The element of error state
   #define a_	(x_.block<3, 1>(ag_i * V_sz, 0))
-  // The Kalman filter estimates the six-component state vector
+  // The Kalman filter estimates the six-component error state vector
   // eq.(31) x = [ a, b ] 6x1
   vec3N x_;
 
