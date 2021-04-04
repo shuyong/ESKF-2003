@@ -364,10 +364,10 @@ private:
   mat3 R_pos_;
   // the covariance of the error angle vector.
   mat3 R_rot_;
-  scalar_t sigma_accel_ = 0.00124; // [m/s^2]  (value derived from Noise Spectral Density in datasheet)
-  scalar_t sigma_accel_drift_ = 0.001f * sigma_accel_; // [m/s^2 sqrt(s)] (Educated guess, real value to be measured)
-  scalar_t sigma_gyro_ = 0.276; // [rad/s] (value derived from Noise Spectral Density in datasheet)
-  scalar_t sigma_gyro_drift_ = 0.001 * sigma_gyro_; // [rad/s sqrt(s)] (Educated guess, real value to be measured)
+  scalar_t sigma_accel_ = 0.125; // [m/s^2]  (value derived from Noise Spectral Density in datasheet)
+  scalar_t sigma_accel_drift_ = 0.1 * sigma_accel_; // [m/s^2 sqrt(s)] (Educated guess, real value to be measured)
+  scalar_t sigma_gyro_ = 0.25; // [rad/s] (value derived from Noise Spectral Density in datasheet)
+  scalar_t sigma_gyro_drift_ = 0.1 * sigma_gyro_; // [rad/s sqrt(s)] (Educated guess, real value to be measured)
   scalar_t sigma_pos_ = 0.003; // [m]
   scalar_t sigma_rot_ = 0.03; // [rad]
   /* process noise covariance */

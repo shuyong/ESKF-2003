@@ -595,9 +595,9 @@ void AttitudeESKF::initialize()
   R_acc_(2, 2) = sigma_accel_ * sigma_accel_;
 
   R_mag_.setIdentity();
-  R_mag_(0, 0) = 2.5E-5;
-  R_mag_(1, 1) = 2.5E-5;
-  R_mag_(2, 2) = 2.5E-5;
+  R_mag_(0, 0) = 0.5 * 0.5;
+  R_mag_(1, 1) = 0.5 * 0.5;
+  R_mag_(2, 2) = 0.5 * 0.5;
 
   // FIXME
   R_pos_ = sigma_pos_ * sigma_pos_ * I3;
